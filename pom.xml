@@ -16,6 +16,8 @@
     <groupId>cl.campuslab</groupId>
     <artifactId>ms-campuslab-catalog</artifactId>
     <version>0.0.1-SNAPSHOT</version>
+    <name>ms-campuslab-catalog</name>
+    <description>Microservicio de catálogo y stock de CampusLab</description>
 
     <properties>
         <java.version>21</java.version>
@@ -46,6 +48,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
         </dependency>
 
         <dependency>

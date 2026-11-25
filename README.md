@@ -1,95 +1,95 @@
 # Microservicio de catálogo CampusLab
 
-Administra laboratorios, equipos e insumos y procesa los movimientos
-de stock asociados a reservas.
+Administra recursos académicos y procesa los movimientos de stock asociados a las reservas.
 
 ## Tecnologías
 
-- Java 21 y Spring Boot.
+- Java 21.
+- Spring Boot.
 - Spring Web MVC.
 - Spring Security OAuth2 Resource Server.
 - Spring Data JPA y MySQL.
-- Spring AMQP.
+- Spring AMQP y RabbitMQ.
 - Maven y Docker.
 
 ## Funcionalidades
 
-- Consulta de recursos.
-- Administración del catálogo para Admin.
-- Validación de stock y disponibilidad.
-- Procesamiento asíncrono de movimientos de stock.
-- Publicación del resultado hacia bookings.
+- Consultar recursos.
+- Administrar el catálogo según el rol autorizado.
+- Validar stock y disponibilidad.
+- Procesar de forma asíncrona los movimientos de stock.
+- Publicar el resultado del movimiento para que Bookings actualice la reserva.
 
-Ruta base de recursos:
+## API de recursos
+
+La ruta base de recursos es:
 
 ```text
 /api/catalog/resources
 ```
 
-## Stock
+Las operaciones de escritura requieren autorización. La autorización del BFF complementa las validaciones del servicio.
 
-Se diferencia entre:
+## Procesamiento de stock
 
-- Stock total: unidades registradas.
-- Stock disponible: unidades que pueden comprometerse.
+Los movimientos se coordinan mediante RabbitMQ:
 
-Los movimientos utilizan:
+- `RESERVE`: compromete unidades disponibles.
+- `RELEASE`: libera una asignación de stock según sus reglas.
+- `FINISH`: finaliza una asignación.
 
-- RESERVE: compromete unidades disponibles.
-- RELEASE: libera una asignación según sus reglas.
-- FINISH: finaliza la asignación.
+El servicio diferencia el stock total de las unidades disponibles. Al finalizar una reserva, los recursos reutilizables pueden volver a estar disponibles; los insumos consumidos se descuentan según las reglas del catálogo.
 
-Al finalizar:
-
-- Los recursos reutilizables recuperan disponibilidad.
-- Los insumos consumidos reducen el stock total según la regla aplicada.
-
-Las reglas impiden disponibilidad negativa y movimientos incompatibles.
+Las reglas de negocio impiden disponibilidad negativa y movimientos incompatibles.
 
 ## Concurrencia e idempotencia
 
-El procesamiento bloquea el recurso durante la transacción.
+El recurso se bloquea durante la transacción para controlar movimientos simultáneos. Las asignaciones se identifican por reserva y los resultados por operación. El procesamiento repetido de un mismo mensaje no debe descontar stock nuevamente.
 
-Las asignaciones se identifican por reserva y los resultados por
-operación. Una entrega repetida no debe descontar stock nuevamente.
-
-El cambio de stock y el resultado pendiente de publicación se
-guardan dentro de una misma transacción.
+El cambio de stock y el resultado pendiente de publicación se guardan dentro de la misma transacción.
 
 ## RabbitMQ
 
-- Entrada: q.cmd.stock.
-- Salida: q.result.stock.
-- Exchange principal: cmd.direct.
-- DLQ y listeners para registrar mensajes rechazados.
-- ACK manual después del procesamiento confirmado.
-- Reintentos acotados para errores recuperables del consumidor.
+- Exchange principal: `cmd.direct`.
+- Cola de entrada para movimientos: `q.cmd.stock`.
+- Cola de salida para resultados: `q.result.stock`.
+- Exchanges, colas y bindings definidos en la configuración de mensajería.
+- ACK manual después de completar el procesamiento.
+- Reintentos acotados para errores recuperables y DLQ para mensajes que no pueden procesarse.
 
-Los nombres y bindings están centralizados en las clases de configuración.
-
-## Seguridad
-
-El servicio valida los tokens recibidos.
-La autorización por rol también se aplica en el BFF.
-
-Los movimientos internos de stock se procesan mediante RabbitMQ.
+Catalog utiliza RabbitMQ para el flujo de stock. Los eventos Kafka de reservas y auditoría son responsabilidad de Bookings y Notifier.
 
 ## Configuración
 
 Variables principales:
 
-- DB_HOST, DB_PORT, DB_NAME, DB_USERNAME, DB_PASSWORD.
-- RABBITMQ_ADDRESSES, RABBITMQ_USER, RABBITMQ_PASSWORD, RABBITMQ_VHOST.
+```text
+DB_HOST
+DB_PORT
+DB_NAME
+DB_USERNAME
+DB_PASSWORD
+RABBITMQ_ADDRESSES
+RABBITMQ_USER
+RABBITMQ_PASSWORD
+RABBITMQ_VHOST
+```
 
-Base de datos: campuslab_catalog.
-Puerto del servicio: 8081.
+Base de datos: `campuslab_catalog`  
+Puerto interno: `8081`
+
+Las credenciales y direcciones del entorno se configuran fuera del repositorio.
 
 ## Compilación
+
+En PowerShell, desde la carpeta del repositorio:
 
 ```powershell
 .\mvnw.cmd clean package -DskipTests
 ```
 
-Este comando compila y empaqueta; omite la ejecución de pruebas.
+Este comando compila y empaqueta el servicio, pero omite la ejecución de pruebas.
 
-El despliegue está definido en infra-campuslab.
+## Despliegue
+
+El servicio se construye y ejecuta mediante Docker Compose en el repositorio `infra-campuslab`.
